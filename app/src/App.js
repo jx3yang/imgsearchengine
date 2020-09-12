@@ -16,7 +16,7 @@ export default class App extends Component {
     state = {
         loading: true,
         uploading: false,
-        image: null
+        srcImage: null
     }
 
     toast = notify.createShowQueue()
@@ -57,7 +57,7 @@ export default class App extends Component {
         .then(image => {
             this.setState({
                 uploading: false, 
-                image: image
+                srcImage: image
             })
         })
         .catch(err => {
@@ -69,7 +69,7 @@ export default class App extends Component {
     }
 
     removeImage = () => {
-        this.setState({ image: null })
+        this.setState({ srcImage: null })
     }
 
     onError = () => {
@@ -78,16 +78,16 @@ export default class App extends Component {
     }
 
     render() {
-        const { loading, uploading, image } = this.state
+        const { loading, uploading, srcImage } = this.state
 
         const content = () => {
             switch(true) {
             case uploading:
                 return <Spinner />
-            case image !== null:
+            case srcImage !== null:
                 return (
                     <SearchForm
-                        sourceImage={image}
+                        sourceImage={srcImage}
                         removeImage={this.removeImage}
                         onError={this.onError}
                     />

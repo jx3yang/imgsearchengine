@@ -37,8 +37,6 @@ func imageUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// handler.Filename, handler.Size, handler.Header
-
 	fileName := uuid.New().String() + ".jpg"
 	internalPath := tempImagesPath + fileName
 	out, err := os.Create(internalPath)
@@ -71,18 +69,9 @@ func main() {
 	// Image search service
 	router.HandleFunc("/knn", engineService.KNNSearch).
 		Methods("POST")
-		// .
-		// Queries(
-		// 	"point", "{point:[0-9]+}",
-		// 	"k", "{k:[0-9]+}",
-		// )
 
 	router.HandleFunc("/rangesearch", engineService.RangeSearch).
-		Methods("GET").
-		Queries(
-			"point", "{point:[0-9]+}",
-			"threshold", "{threshold:(?:[0-9]+[.])?[0-9]+}",
-		)
+		Methods("POST")
 
 	router.HandleFunc("/ping-engine", engineService.Ping).
 		Methods("GET")

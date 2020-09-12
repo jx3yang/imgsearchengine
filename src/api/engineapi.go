@@ -47,40 +47,61 @@ func (service *EngineAPI) Ping(w http.ResponseWriter, r *http.Request) {
 // where the point is expected to be the uint representation of the phash of the image
 func (service *EngineAPI) KNNSearch(w http.ResponseWriter, r *http.Request) {
 	k, errK := strconv.ParseUint(r.FormValue("query"), 10, 64)
-	imagePath := r.FormValue("image")
 
 	if errK != nil {
 		w.WriteHeader(http.StatusBadRequest)
-	} else if service.invalidTree() {
-		w.WriteHeader(http.StatusInternalServerError)
-	} else {
-		resp, errG := http.Get(imagePath)
-		if errG != nil || resp.StatusCode != http.StatusOK {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		img, _, errImg := image.Decode(resp.Body)
-		if errImg != nil {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		results, errKnn := service.knnSearch(img, uint(k))
-		if errKnn != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(results)
+		return
 	}
 
+	searchFnc := func(img image.Image) ([]map[string]interface{}, error) {
+		return service.knnSearch(img, uint(k))
+	}
+
+	service.search(w, r, searchFnc)
 }
 
 func (service *EngineAPI) knnSearch(img image.Image, k uint) ([]map[string]interface{}, error) {
+	searchFnc := func(queryPoint *engine.ImageInfo) (map[interface{}]float64, error) {
+		return service.Tree.KNNSearch(queryPoint, uint(k))
+	}
+
+	return getResults(img, searchFnc)
+}
+
+// RangeSearch will look all the points within `threshold` distance
+// of the given point
+func (service *EngineAPI) RangeSearch(w http.ResponseWriter, r *http.Request) {
+	threshold, errT := strconv.ParseFloat(r.FormValue("query"), 64)
+
+	if errT != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	searchFnc := func(img image.Image) ([]map[string]interface{}, error) {
+		return service.rangeSearch(img, threshold)
+	}
+
+	service.search(w, r, searchFnc)
+}
+
+func (service *EngineAPI) rangeSearch(img image.Image, threshold float64) ([]map[string]interface{}, error) {
+	searchFnc := func(queryPoint *engine.ImageInfo) (map[interface{}]float64, error) {
+		return service.Tree.RangeSearch(queryPoint, threshold)
+	}
+
+	return getResults(img, searchFnc)
+}
+
+func getResults(img image.Image, searchFnc func(*engine.ImageInfo) (map[interface{}]float64, error)) ([]map[string]interface{}, error) {
 	hash := phash.GetPHash(img)
 	queryPoint := engine.NewImageInfo(hash, "")
-	knnMap, errKnn := service.Tree.KNNSearch(queryPoint, uint(k))
-	if errKnn != nil {
-		return nil, errKnn
+	searchResults, err := searchFnc(queryPoint)
+	if err != nil {
+		return nil, err
 	}
 	results := make([]map[string]interface{}, 0)
-	for k, v := range knnMap {
+	for k, v := range searchResults {
 		elem := make(map[string]interface{})
 		imgInfo := k.(*engine.ImageInfo)
 		imgInfoMap := map[string]interface{}{"path": imgInfo.GetPath(), "phash": imgInfo.GetPHash()}
@@ -91,34 +112,28 @@ func (service *EngineAPI) knnSearch(img image.Image, k uint) ([]map[string]inter
 	return results, nil
 }
 
-// RangeSearch will look all the points within `threshold` distance
-// of the given point
-func (service *EngineAPI) RangeSearch(w http.ResponseWriter, r *http.Request) {
-	point, errP := strconv.ParseUint(r.FormValue("point"), 10, 64)
-	threshold, errT := strconv.ParseFloat(r.FormValue("threshold"), 64)
+func (service *EngineAPI) search(w http.ResponseWriter, r *http.Request, searchFnc func(img image.Image) ([]map[string]interface{}, error)) {
+	imagePath := r.FormValue("image")
 
-	if errP != nil || errT != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	} else if service.invalidTree() {
+	if service.invalidTree() {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
-		hash := phash.PHash(point)
-		queryPoint := engine.NewImageInfo(hash, "")
-		rangeMap, errR := service.Tree.RangeSearch(queryPoint, threshold)
-		if errR != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		resp, errG := http.Get(imagePath)
+		if errG != nil || resp.StatusCode != http.StatusOK {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		results := make([]map[string]interface{}, 0)
-		for k, v := range rangeMap {
-			elem := make(map[string]interface{})
-			imgInfo := k.(*engine.ImageInfo)
-			imgInfoMap := map[string]interface{}{"path": imgInfo.GetPath(), "phash": imgInfo.GetPHash()}
-			elem["imageInfo"] = imgInfoMap
-			elem["distance"] = v
-			results = append(results, elem)
+		img, _, errImg := image.Decode(resp.Body)
+		if errImg != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
-		json.NewEncoder(w).Encode(results)
+		results, errSearch := searchFnc(img)
+		if errSearch != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(results)
+		}
 	}
 }

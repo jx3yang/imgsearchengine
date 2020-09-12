@@ -66,6 +66,7 @@ class SearchForm extends Component {
 
     removeImages = () => {
         this.setState({images: []})
+        this.props.removeImage()
     }
 
     render() {
@@ -74,8 +75,9 @@ class SearchForm extends Component {
                 return (
                     <Images
                         images={this.state.resultImages}
-                        removeImages={this.removeImages}
-                        onError={this.removeImages}
+                        removeImages={() => {}}
+                        onError={() => {}}
+                        hasDelete={false}
                     />
                 )
             } else {
@@ -108,8 +110,9 @@ class SearchForm extends Component {
             <div>
                 <Images
                     images={[this.sourceImage]}
-                    removeImages={this.props.removeImage}
+                    removeImages={this.removeImages}
                     onError={this.props.onError}
+                    hasDelete={true}
                 />
                 {content()}
             </div>
